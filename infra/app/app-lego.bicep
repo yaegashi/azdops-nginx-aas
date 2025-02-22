@@ -75,7 +75,7 @@ resource appLego 'Microsoft.App/jobs@2024-10-02-preview' = {
       containers: [
         {
           name: 'legoaz'
-          image: 'ghcr.io/yaegashi/azdops-nginx-aca/legoaz'
+          image: 'ghcr.io/yaegashi/azdops-nginx-aas/legoaz'
           command: [
             'sh'
             '-c'
