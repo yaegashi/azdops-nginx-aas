@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 env:
-  AZDOPS_TEMPLATE: azdops-nginx-aca
+  AZDOPS_TEMPLATE: azdops-nginx-aas
   AZD_INPUTS_FILE: .github/azdops/${{ github.ref_name }}/inputs.yml
   AZD_REMOTE_FILE: .github/azdops/${{ github.ref_name }}/remote.yml
 

@@ -1,5 +1,5 @@
 site_name: AZDOPS NGINX ACA Document
-repo_url: https://github.com/yaegashi/azdops-nginx-aca
+repo_url: https://github.com/yaegashi/azdops-nginx-aas
 edit_uri: blob/main/docs/
 
 plugins:

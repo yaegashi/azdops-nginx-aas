@@ -1,5 +1,5 @@
 {
-	"image": "ghcr.io/yaegashi/azdops-nginx-aca/devcontainer:latest",
+	"image": "ghcr.io/yaegashi/azdops-nginx-aas/devcontainer:latest",
 	"postCreateCommand": "bash -x .devcontainer/install-dev-tools.sh",
 	"customizations": {
 		"vscode": {
