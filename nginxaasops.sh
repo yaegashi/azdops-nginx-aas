@@ -6,7 +6,7 @@ eval $(azd env get-values)
 
 : ${NOPROMPT=false}
 : ${VERBOSE=false}
-: ${AZ_ARGS="-g $AZURE_RESOURCE_GROUP_NAME -n $AZURE_CONTAINER_APPS_APP_NAME"}
+: ${AZ_ARGS="-g $AZURE_RESOURCE_GROUP_NAME -n $AZURE_APP_NAME"}
 : ${AZ_REVISION=}
 : ${AZ_REPLICA=}
 : ${AZ_CONTAINER=nginx}
@@ -35,11 +35,7 @@ confirm() {
 }
 
 app_hostnames() {
-	HOSTNAMES=$(az containerapp hostname list $AZ_ARGS --query [].name -o tsv)
-	if test -z "$HOSTNAMES"; then
-		HOSTNAMES=$(az containerapp show $ARGS --query properties.configuration.ingress.fqdn -o tsv)
-	fi
-	echo $HOSTNAMES
+	az webapp show $AZ_ARGS --query hostNames -o tsv | grep -v 'azurewebsites\.net$'
 }
 
 cmd_meid_redirect() {
@@ -57,7 +53,7 @@ cmd_meid_redirect() {
 }
 
 cmd_meid_secret() {
-	HOSTS=$(app_hostnames)
+	HOSTS=$(app_hostnames | grep -v '\*')
 	CRED_TIME=$(date +%s)
 	CRED_NAME="$HOSTS $CRED_TIME"
 	msg "ME-ID App Client ID: ${MS_CLIENT_ID}"
@@ -66,7 +62,7 @@ cmd_meid_secret() {
 	msg "ME-ID App new credential name: $CRED_NAME"
 	PASSWORD=$(az ad app credential reset --id $MS_CLIENT_ID --append --display-name "$CRED_NAME" --end-date 2299-12-31 --query password -o tsv 2>/dev/null)
 	run az keyvault secret set --vault-name $AZURE_KEY_VAULT_NAME --name MS-CLIENT-SECRET --file <(echo -n "$PASSWORD") >/dev/null
-	run az containerapp revision copy $AZ_ARGS --revision-suffix $CRED_TIME >/dev/null
+	run az webapp config appsettings set $AZ_ARGS --settings CRED_NAME="$CRED_NAME"
 }
 
 cmd_data_get() {
@@ -85,81 +81,33 @@ cmd_data_put() {
 	run az storage file upload --only-show-errors --account-name $AZURE_STORAGE_ACCOUNT_NAME -s data -p "$1" --source "$2" >/dev/null
 }
 
-cmd_aca_show() {
-	run az containerapp show -g $AZURE_RESOURCE_GROUP_NAME -n $AZURE_CONTAINER_APPS_APP_NAME
+cmd_aas_show() {
+	run az webapp show $AZ_ARGS
 }
 
-cmd_aca_revisions() {
+cmd_aas_hostnames() {
 	ARGS="$AZ_ARGS"
-	if ! $VERBOSE; then
-		ARGS="$ARGS --query [].{revision:name,created:properties.createdTime,state:properties.runningState,weight:properties.trafficWeight} -o table"
-	fi
-	run az containerapp revision list $ARGS
+	run az webapp show $ARGS --query hostNames -o tsv
 }
 
-cmd_aca_replicas() {
+cmd_aas_logs() {
 	ARGS="$AZ_ARGS"
-	if test -n "$AZ_REVISION"; then
-		ARGS="$ARGS --revision $AZ_REVISION"
-	fi
-	if ! $VERBOSE; then
-		ARGS="$ARGS --query [].{replica:name,created:properties.createdTime,state:properties.runningState} -o table"
-	fi
-	run az containerapp replica list $ARGS
+	run az webapp log tail $ARGS
 }
 
-cmd_aca_hostnames() {
+cmd_aas_console() {
 	ARGS="$AZ_ARGS"
-	if ! $VERBOSE; then
-		ARGS="$ARGS --query [].{hostname:name} -o table"
-	fi
-	run az containerapp hostname list $ARGS
+	run az webapp ssh $ARGS
 }
 
-cmd_aca_logs() {
-	ARGS="$AZ_ARGS --container $AZ_CONTAINER"
-	if test -n "$AZ_REVISION"; then
-		ARGS="$ARGS --revision $AZ_REVISION"
-	fi
-	if test -n "$AZ_REPLICA"; then
-		ARGS="$ARGS --replica $AZ_REPLICA"
-	fi
-	if ! $VERBOSE; then
-		ARGS="$ARGS --format text"
-	fi
-	if test "$1" = 'follow'; then
-		ARGS="$ARGS --follow"
-	fi
-	run az containerapp logs show $ARGS
-}
-
-cmd_aca_console() {
-	ARGS="$AZ_ARGS --container $AZ_CONTAINER"
-	if test -n "$AZ_REVISION"; then
-		ARGS="$ARGS --revision $AZ_REVISION"
-	fi
-	if test -n "$AZ_REPLICA"; then
-		ARGS="$ARGS --replica $AZ_REPLICA"
-	fi
-	CMD="$*"
-	if test -z "$CMD"; then
-		CMD=bash
-	fi
-	run az containerapp exec $ARGS --command "$CMD"
-	run stty sane
-}
-
-cmd_aca_restart() {
-	if test -z "$AZ_REVISION"; then
-		AZ_REVISION=$(az containerapp show -g $AZURE_RESOURCE_GROUP_NAME -n $AZURE_CONTAINER_APPS_APP_NAME --query properties.latestRevisionName -o tsv)
-	fi
-	ARGS="$AZ_ARGS --revision $AZ_REVISION"
-	msg "Restarting revision $AZ_REVISION..."
+cmd_aas_restart() {
+	ARGS="$AZ_ARGS"
+	msg "Restarting app..."
 	confirm
-	run az containerapp revision restart $ARGS
+	run az webapp restart $ARGS
 }
 
-cmd_portal_aca() {
+cmd_portal_aas() {
 	URL="https://portal.azure.com/#@${AZURE_TENANT_ID}/resource/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP_NAME}"
 	run xdg-open "$URL"
 }
@@ -174,15 +122,8 @@ cmd_portal_meid() {
 }
 
 cmd_open() {
-	HOSTS=$(app_hostnames)
-	for HOST in $HOSTS; do
-		if test "${HOST%%.*}" != "*"; then
-			run xdg-open "https://${HOST}${APP_ROOT_PATH}"
-			exit 0
-		fi
-	done
-	msg 'No valid hostname found'
-	exit 1
+	ARGS="$AZ_ARGS"
+	run az webapp browse $ARGS
 }
 
 cmd_help() {
@@ -199,14 +140,12 @@ cmd_help() {
 	msg "  meid-secret                - ME-ID: create new client secret"
 	msg "  data-get <remote> <local>  - Data: download file"
 	msg "  data-put <remote> <local>  - Data: upload file"
-	msg "  aca-show                   - ACA: show app"
-	msg "  aca-revisions              - ACA: list revisions"
-	msg "  aca-replicas               - ACA: list replicas"
-	msg "  aca-hostnames              - ACA: list hostnames"
-	msg "  aca-restart                - ACA: restart revision"
-	msg "  aca-logs [follow]          - ACA: show container logs"
-	msg "  aca-console [command...]   - ACA: connect to container"
-	msg "  portal-aca                 - Portal: open ACA resource group in browser"
+	msg "  aas-show                   - AAS: show app"
+	msg "  aas-hostnames              - AAS: list hostnames"
+	msg "  aas-restart                - AAS: restart revision"
+	msg "  aas-logs                   - AAS: show container logs"
+	msg "  aas-console                - AAS: connect to container"
+	msg "  portal-aas                 - Portal: open AAS resource group in browser"
 	msg "  portal-meid                - Portal: open ME-ID app registration in browser"
 	msg "  open                       - open app in browser"
 	exit $1
@@ -277,37 +216,29 @@ case "$1" in
 		shift
 		cmd_data_put "$@"
 		;;
-	aca-show)
+	aas-show)
 		shift
-		cmd_aca_show "$@"
+		cmd_aas_show "$@"
 		;;
-	aca-revisions)
+	aas-hostnames)
 		shift
-		cmd_aca_revisions "$@"
+		cmd_aas_hostnames "$@"
 		;;
-	aca-replicas)
+	aas-logs)
 		shift
-		cmd_aca_replicas "$@"
+		cmd_aas_logs "$@"
 		;;
-	aca-hostnames)
+	aas-console)
 		shift
-		cmd_aca_hostnames "$@"
+		cmd_aas_console "$@"
 		;;
-	aca-logs)
+	aas-restart)
 		shift
-		cmd_aca_logs "$@"
+		cmd_aas_restart "$@"
 		;;
-	aca-console)
+	portal-aas)
 		shift
-		cmd_aca_console "$@"
-		;;
-	aca-restart)
-		shift
-		cmd_aca_restart "$@"
-		;;
-	portal-aca)
-		shift
-		cmd_portal_aca "$@"
+		cmd_portal_aas "$@"
 		;;
 	portal-meid)
 		shift

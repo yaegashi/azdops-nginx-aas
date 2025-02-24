@@ -1,31 +1,32 @@
-param containerAppsEnvironmentName string
-param containerAppName string
+param name string
 param location string = resourceGroup().location
 param tags object = {}
-param storageAccountName string
+param appServicePlanId string
+param applicationInsightsName string = ''
+param logAnalyticsWorkspaceName string
 param dnsDomainName string = ''
 param dnsWildcard bool = false
-@allowed(['CNAME', 'TXT', 'HTTP'])
-param domainControlValidation string = 'CNAME'
-param dnsCertificateKV string = ''
-param msTenantId string
+@allowed(['CName', 'A'])
+param dnsRecordType string = 'CName'
+param dnsCertificateKeyVaultId string = ''
+param dnsCertificateKeyVaultSecretName string = ''
 param msClientId string
+param msTenantId string
 param msClientSecretKV string
 param msAllowedGroupId string = ''
+param storageAccountName string
 param userAssignedIdentityName string
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: userAssignedIdentityName
 }
 
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
+  name: logAnalyticsWorkspaceName
+}
+
 resource storage 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
   name: storageAccountName
-  resource blobService 'blobServices' = {
-    name: 'default'
-    resource tokenStore 'containers' = {
-      name: 'token-store'
-    }
-  }
   resource fileService 'fileServices' = {
     name: 'default'
     resource nginx 'shares' = {
@@ -34,185 +35,198 @@ resource storage 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
   }
 }
 
-// See https://learn.microsoft.com/en-us/rest/api/storagerp/storage-accounts/list-service-sas
-var tokenStoreSas = storage.listServiceSAS('2022-05-01', {
-  canonicalizedResource: '/blob/${storage.name}/${storage::blobService::tokenStore.name}'
-  signedProtocol: 'https'
-  signedResource: 'c'
-  signedPermission: 'rwdl'
-  signedExpiry: '3000-01-01T00:00:00Z'
-}).serviceSasToken
-var tokenStoreUrl = 'https://${storage.name}.blob.${environment().suffixes.storage}/${storage::blobService::tokenStore.name}?${tokenStoreSas}'
-
-resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-10-02-preview' existing = {
-  name: containerAppsEnvironmentName
-  resource nginx 'storages' = {
-    name: 'nginx'
-    properties: {
-      azureFile: {
-        accessMode: 'ReadWrite'
-        accountName: storage.name
-        accountKey: storage.listKeys().keys[0].value
-        shareName: storage::fileService::nginx.name
-      }
-    }
-  }
-}
-
-resource appCertificate 'Microsoft.App/managedEnvironments/managedCertificates@2024-10-02-preview' = if (!empty(dnsDomainName)) {
-  parent: containerAppsEnvironment
+resource appCertificate 'Microsoft.Web/certificates@2024-04-01' = if (!empty(dnsDomainName)) {
   name: 'app-cert-${dnsDomainName}'
   location: location
   tags: tags
   properties: {
-    subjectName: dnsDomainName
-    domainControlValidation: domainControlValidation
+    canonicalName: dnsDomainName
+    serverFarmId: appServicePlanId
   }
 }
 
-resource dnsCertificate 'Microsoft.App/managedEnvironments/certificates@2024-10-02-preview' = if (!empty(dnsCertificateKV)) {
-  parent: containerAppsEnvironment
+resource dnsCertificate 'Microsoft.Web/certificates@2024-04-01' = if (!empty(dnsCertificateKeyVaultId)) {
   name: 'dns-cert-${dnsDomainName}'
   location: location
   tags: tags
   properties: {
-    certificateKeyVaultProperties: {
-      keyVaultUrl: dnsCertificateKV
-      identity: userAssignedIdentity.id
-    }
+    hostNames: ['*.${dnsDomainName}']
+    keyVaultId: dnsCertificateKeyVaultId
+    keyVaultSecretName: dnsCertificateKeyVaultSecretName
+    serverFarmId: appServicePlanId
   }
 }
 
-var appCertDomain = { name: dnsDomainName, certificateId: appCertificate.id, bindingType: 'SniEnabled' }
-var dnsCertDomain = empty(dnsCertificateKV)
-  ? { name: '*.${dnsDomainName}', certificateId: null, bindingType: 'Disabled' }
-  : { name: '*.${dnsDomainName}', certificateId: dnsCertificate.id, bindingType: 'SniEnabled' }
-
-resource containerApp 'Microsoft.App/containerApps@2024-10-02-preview' = {
-  name: containerAppName
+resource app 'Microsoft.Web/sites@2024-04-01' = {
+  name: name
   location: location
   tags: tags
+  properties: {
+    siteConfig: {
+      linuxFxVersion: 'DOCKER|ghcr.io/yaegashi/azdops-nginx-aas/nginx:latest'
+      alwaysOn: true
+      azureStorageAccounts: {}
+    }
+    serverFarmId: appServicePlanId
+    keyVaultReferenceIdentity: userAssignedIdentity.id
+  }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${userAssignedIdentity.id}': {}
     }
   }
-  properties: {
-    managedEnvironmentId: containerAppsEnvironment.id
-    configuration: {
-      ingress: {
-        external: true
-        targetPort: 80
-        customDomains: empty(dnsDomainName) ? null : concat([appCertDomain], dnsWildcard ? [dnsCertDomain] : [])
-      }
-      secrets: [
-        {
-          name: 'microsoft-provider-authentication-secret'
-          keyVaultUrl: msClientSecretKV
-          identity: userAssignedIdentity.id
-        }
-        {
-          name: 'token-store-url'
-          value: tokenStoreUrl
-        }
-      ]
-      identitySettings: [
-        {
-          identity: userAssignedIdentity.id
-          lifecycle: 'All'
-        }
-      ]
-    }
-    template: {
-      volumes: [
-        {
-          name: 'nginx'
-          storageName: containerAppsEnvironment::nginx.name
-          storageType: 'AzureFile'
-        }
-      ]
-      containers: [
-        {
-          name: 'nginx'
-          image: 'nginx'
-          env: [
-            {
-              name: 'NGINX_HOST'
-              value: dnsDomainName
-            }
-            {
-              name: 'NGINX_PORT'
-              value: '80'
-            }
-          ]
-          resources: {
-            cpu: json('0.25')
-            memory: '0.5Gi'
-          }
-          volumeMounts: [
-            {
-              volumeName: 'nginx'
-              subPath: 'templates'
-              mountPath: '/etc/nginx/templates'
-            }
-            {
-              volumeName: 'nginx'
-              subPath: 'data'
-              mountPath: '/data'
-            }
-          ]
-        }
-      ]
-      scale: {
-        minReplicas: 0
-        maxReplicas: 1
-        cooldownPeriod: 3600
-      }
-    }
-  }
+}
 
-  resource authConfigs 'authConfigs' = if (!empty(msTenantId) && !empty(msClientId)) {
-    name: 'current'
-    properties: {
-      identityProviders: {
-        azureActiveDirectory: {
-          registration: {
-            clientId: msClientId
-            clientSecretSettingName: 'microsoft-provider-authentication-secret'
-            openIdIssuer: 'https://sts.windows.net/${msTenantId}/v2.0'
-          }
-          validation: {
-            allowedAudiences: [
-              'api://${msClientId}'
-            ]
-            defaultAuthorizationPolicy: {
-              allowedPrincipals: {
-                groups: empty(msAllowedGroupId) ? null : [msAllowedGroupId]
-              }
+resource appHostNameBinding 'Microsoft.Web/sites/hostNameBindings@2024-04-01' = {
+  parent: app
+  name: dnsDomainName
+  properties: {
+    azureResourceName: app.name
+    azureResourceType: 'Website'
+    siteName: app.name
+    sslState: 'SniEnabled'
+    thumbprint: appCertificate.properties.thumbprint
+    customHostNameDnsRecordType: dnsRecordType
+  }
+}
+
+resource appHostNameBindingWildcard 'Microsoft.Web/sites/hostNameBindings@2024-04-01' = if (dnsWildcard) {
+  dependsOn: [appHostNameBinding]
+  parent: app
+  name: '*.${dnsDomainName}'
+  properties: {
+    azureResourceName: app.name
+    azureResourceType: 'Website'
+    siteName: app.name
+  }
+}
+
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing = if (!empty(applicationInsightsName)) {
+  name: applicationInsightsName
+}
+
+resource configAppSettings 'Microsoft.Web/sites/config@2024-04-01' = {
+  name: 'appsettings'
+  parent: app
+  properties: {
+    WEBSITES_ENABLE_APP_SERVICE_STORAGE: 'true'
+    APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsights.properties.ConnectionString
+    MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: '@Microsoft.KeyVault(SecretUri=${msClientSecretKV})'
+    NGINX_HOST: empty(dnsDomainName) ? app.properties.defaultHostName : dnsDomainName
+    NGINX_PORT: '80'
+  }
+}
+
+resource configLogs 'Microsoft.Web/sites/config@2024-04-01' = {
+  dependsOn: [configAppSettings]
+  name: 'logs'
+  parent: app
+  properties: {
+    applicationLogs: { fileSystem: { level: 'Verbose' } }
+    detailedErrorMessages: { enabled: true }
+    failedRequestsTracing: { enabled: true }
+    httpLogs: { fileSystem: { enabled: true, retentionInDays: 1, retentionInMb: 35 } }
+  }
+}
+
+resource configAuthSettingsV2 'Microsoft.Web/sites/config@2024-04-01' = {
+  dependsOn: [configLogs]
+  name: 'authsettingsV2'
+  parent: app
+  properties: {
+    globalValidation: {
+      requireAuthentication: true
+      unauthenticatedClientAction: 'RedirectToLoginPage'
+      redirectToProvider: 'azureActiveDirectory'
+    }
+    identityProviders: {
+      azureActiveDirectory: {
+        registration: {
+          clientId: msClientId
+          clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+          openIdIssuer: 'https://sts.windows.net/${msTenantId}/v2.0'
+        }
+        validation: {
+          allowedAudiences: [
+            'api://${msClientId}'
+          ]
+          defaultAuthorizationPolicy: {
+            allowedPrincipals: {
+              groups: empty(msAllowedGroupId) ? null : [msAllowedGroupId]
             }
           }
-          login: {
-            loginParameters: ['scope=openid profile email offline_access']
-          }
+        }
+        login: {
+          loginParameters: ['scope=openid profile email offline_access']
         }
       }
-      platform: {
+    }
+    platform: {
+      enabled: true
+    }
+    login: {
+      tokenStore: {
         enabled: true
-      }
-      login: {
-        tokenStore: {
-          enabled: true
-          azureBlobStorage: {
-            sasUrlSettingName: 'token-store-url'
-          }
-        }
       }
     }
   }
 }
 
-output id string = containerApp.id
-output name string = containerApp.name
-output fqdn string = containerApp.properties.configuration.ingress.fqdn
-output properties object = containerApp.properties
+resource configStorageMount 'Microsoft.Web/sites/config@2024-04-01' = {
+  name: 'azurestorageaccounts'
+  parent: app
+  properties: {
+    azureStorageAccounts: {
+      type: 'AzureFiles'
+      protocol: 'SMB'
+      accountName: storage.name
+      shareName: storage::fileService::nginx.name
+      accessKey: storage.listKeys().keys[0].value
+      mountPath: '/nginx'
+    }
+  }
+}
+
+resource logAnalytics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'logAnalytics'
+  scope: app
+  properties: {
+    logs: [
+      {
+        category: 'AppServiceHTTPLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceConsoleLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceAppLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceAuditLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceIPSecAuditLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServicePlatformLogs'
+        enabled: true
+      }
+    ]
+    metrics: [
+      {
+        category: 'AllMetrics'
+        enabled: true
+      }
+    ]
+    workspaceId: logAnalyticsWorkspace.id
+  }
+}
+
+output id string = app.id
+output name string = app.name

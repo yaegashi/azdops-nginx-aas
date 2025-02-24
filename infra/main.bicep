@@ -23,10 +23,6 @@ param applicationInsightsName string = ''
 
 param applicationInsightsDashboardName string = ''
 
-param containerAppName string = ''
-
-param containerAppsEnvironmentName string = ''
-
 param appCertificateExists bool = false
 
 param dnsZoneSubscriptionId string = subscription().subscriptionId
@@ -76,7 +72,7 @@ module dnsTXT './app/dns-txt.bicep' = if (dnsEnable && !appCertificateExists) {
   params: {
     dnsZoneName: dnsZoneName
     dnsRecordName: dnsRecordName == '@' ? 'asuid' : 'asuid.${dnsRecordName}'
-    txt: env.outputs.customDomainVerificationId
+    txt: toLower(appPrep1.outputs.customDomainVerificationId)
   }
 }
 
@@ -86,7 +82,7 @@ module dnsCNAME './app/dns-cname.bicep' = if (dnsEnable && !appCertificateExists
   params: {
     dnsZoneName: dnsZoneName
     dnsRecordName: dnsRecordName
-    cname: appPrep.outputs.fqdn
+    cname: appPrep1.outputs.fqdn
   }
 }
 
@@ -96,7 +92,7 @@ module dnsCNAMEWildcard './app/dns-cname.bicep' = if (dnsEnable && !appCertifica
   params: {
     dnsZoneName: dnsZoneName
     dnsRecordName: '*.${dnsRecordName}'
-    cname: appPrep.outputs.fqdn
+    cname: appPrep1.outputs.fqdn
   }
 }
 
@@ -106,7 +102,7 @@ module dnsA './app/dns-a.bicep' = if (dnsEnable && !appCertificateExists && dnsR
   params: {
     dnsZoneName: dnsZoneName
     dnsRecordName: dnsRecordName
-    a: env.outputs.staticIp
+    a: appPrep1.outputs.staticIp
   }
 }
 
@@ -116,7 +112,7 @@ module dnsAWildcard './app/dns-a.bicep' = if (dnsEnable && !appCertificateExists
   params: {
     dnsZoneName: dnsZoneName
     dnsRecordName: '*'
-    a: env.outputs.staticIp
+    a: appPrep1.outputs.staticIp
   }
 }
 
@@ -231,74 +227,62 @@ module monitoring './core/monitor/monitoring.bicep' = {
       : '${abbrs.portalDashboards}${resourceToken}'
   }
 }
-
-var xContainerAppsEnvironmentName = !empty(containerAppsEnvironmentName)
-  ? containerAppsEnvironmentName
-  : '${abbrs.appManagedEnvironments}${resourceToken}'
-var xContainerAppName = !empty(containerAppName) ? containerAppName : '${abbrs.appContainerApps}${resourceToken}'
-
-module env './app/env.bicep' = {
-  name: 'env'
+module asp './core/host/appserviceplan.bicep' = {
+  name: 'asp'
   scope: rg
   params: {
     location: location
     tags: tags
-    containerAppsEnvironmentName: xContainerAppsEnvironmentName
-    logAnalyticsWorkspaceName: monitoring.outputs.logAnalyticsWorkspaceName
-    userAssignedIdentityName: userAssignedIdentity.outputs.name
+    name: '${abbrs.webServerFarms}${resourceToken}'
+    sku: { name: 'B1' }
+    kind: 'Linux'
   }
 }
 
-module appPrep './app/app-prep.bicep' = if (dnsEnable && !appCertificateExists) {
-  dependsOn: [dnsTXT]
-  name: 'appPrep'
+module appPrep1 './app/app-prep1.bicep' = if (dnsEnable && !appCertificateExists) {
+  name: 'appPrep1'
   scope: rg
   params: {
     location: location
     tags: tags
-    containerAppsEnvironmentName: env.outputs.name
-    containerAppName: xContainerAppName
+    name: '${abbrs.webSitesAppService}${resourceToken}'
+    appServicePlanId: asp.outputs.id
+  }
+}
+
+module appPrep2 './app/app-prep2.bicep' = if (dnsEnable && !appCertificateExists) {
+  dependsOn: [dnsTXT]
+  name: 'appPrep2'
+  scope: rg
+  params: {
+    name: '${abbrs.webSitesAppService}${resourceToken}'
     dnsDomainName: dnsDomainName
     dnsWildcard: dnsWildcard
   }
 }
 
 module app './app/app.bicep' = {
-  dependsOn: [KeyVaultAccessUserAssignedIdentity, dnsCNAME, dnsA, appPrep]
+  dependsOn: [dnsCNAME, dnsA, appPrep2]
   name: 'app'
   scope: rg
   params: {
     location: location
     tags: tags
-    containerAppsEnvironmentName: env.outputs.name
-    containerAppName: xContainerAppName
+    name: '${abbrs.webSitesAppService}${resourceToken}'
+    appServicePlanId: asp.outputs.id
+    applicationInsightsName: monitoring.outputs.applicationInsightsName
+    logAnalyticsWorkspaceName: monitoring.outputs.logAnalyticsWorkspaceName
     storageAccountName: storageAccount.outputs.name
     userAssignedIdentityName: userAssignedIdentity.outputs.name
     dnsDomainName: dnsDomainName
     dnsWildcard: dnsWildcard
-    domainControlValidation: dnsRecordName == '@' ? 'HTTP' : 'CNAME'
-    dnsCertificateKV: dnsCertificateExists ? '${keyVault.outputs.endpoint}secrets/DNS-CERTIFICATE' : ''
+    dnsRecordType: dnsRecordName == '@' ? 'A' : 'CName'
+    dnsCertificateKeyVaultId: dnsCertificateExists ? keyVault.outputs.id : ''
+    dnsCertificateKeyVaultSecretName: dnsCertificateExists ? 'DNS-CERTIFICATE' : ''
     msTenantId: msTenantId
     msClientId: msClientId
     msClientSecretKV: '${keyVault.outputs.endpoint}secrets/MS-CLIENT-SECRET'
     msAllowedGroupId: msAllowedGroupId
-  }
-}
-
-module appLego './app/app-lego.bicep' = if (legoEnable) {
-  name: 'appLego'
-  scope: rg
-  params: {
-    location: location
-    tags: tags
-    containerAppsEnvironmentName: env.outputs.name
-    containerAppName: xContainerAppName
-    storageAccountName: storageAccount.outputs.name
-    userAssignedIdentityName: userAssignedIdentity.outputs.name
-    keyVaultName: keyVault.outputs.name
-    dnsDomainName: dnsDomainName
-    legoEmail: legoEmail
-    legoServer: legoServer
   }
 }
 
@@ -307,9 +291,8 @@ output AZURE_TENANT_ID string = tenant().tenantId
 output AZURE_SUBSCRIPTION_ID string = subscription().subscriptionId
 output AZURE_PRINCIPAL_ID string = principalId
 output AZURE_RESOURCE_GROUP_NAME string = rg.name
+output AZURE_APP_NAME string = app.outputs.name
 output AZURE_KEY_VAULT_NAME string = keyVault.outputs.name
 output AZURE_KEY_VAULT_ENDPOINT string = keyVault.outputs.endpoint
-output AZURE_CONTAINER_APPS_APP_NAME string = app.outputs.name
-output AZURE_CONTAINER_APPS_LEGO_NAME string = legoEnable ? appLego.outputs.name : ''
 output AZURE_STORAGE_ACCOUNT_NAME string = storageAccount.outputs.name
 output APP_CERTIFICATE_EXISTS bool = !empty(dnsDomainName)
