@@ -32,6 +32,9 @@ resource storage 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
     resource nginx 'shares' = {
       name: 'nginx'
     }
+    resource lego 'shares' = {
+      name: 'lego'
+    }
   }
 }
 
