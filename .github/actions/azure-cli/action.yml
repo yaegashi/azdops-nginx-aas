@@ -1,0 +1,29 @@
+name: 'Azure CLI with OIDC or secrets'
+description: 'Login to Azure CLI with secrets if env.AZURE_CLIENT_SECRET exists, otherwise with OIDC'
+outputs:
+  secret_exists:
+    description: 'Whether env.AZURE_CLIENT_SECRET exists'
+    value: ${{ steps.check.outputs.secret_exists }}
+runs:
+  using: composite
+  steps:
+    - name: Check if env.AZURE_CLIENT_SECRET exists
+      id: check
+      shell: bash
+      run: |
+        test -n '${{ env.AZURE_CLIENT_SECRET }}' && exist=true || exist=false
+        echo "secret_exists=$exist" >> $GITHUB_OUTPUT
+    - name: Azure CLI with OIDC
+      if: steps.check.outputs.secret_exists == 'false'
+      uses: azure/login@v2
+      with:
+        client-id: ${{ env.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: Azure CLI with secrets
+      if: steps.check.outputs.secret_exists == 'true'
+      uses: azure/login@v2
+      with:
+        creds: '{"clientId":"${{ env.AZURE_CLIENT_ID }}","clientSecret":"${{ env.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ env.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ env.AZURE_TENANT_ID }}"}'
+        enable-AzPSSession: true

@@ -1,0 +1,39 @@
+name: AZD Ops Deprovision
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  AZD_INPUTS_FILE: .github/azdops/inputs.yml
+
+jobs:
+  azdops-provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Load AZD Ops inputs.yml
+        uses: actions-tools/yaml-outputs@v2
+        id: inputs
+        with:
+          file-path: ${{ env.AZD_INPUTS_FILE }}
+      - name: Azure CLI
+        id: azure-cli
+        uses: ./.github/actions/azure-cli
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      - name: AZD Deprovision
+        shell: bash
+        run: |
+          set -x
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          BRANCH_NAME="${GITHUB_REF_NAME}"
+          ENV_NAME="${REPO_NAME}_${BRANCH_NAME}"
+          if test -z "$AZURE_RESOURCE_GROUP_NAME"; then
+            AZURE_RESOURCE_GROUP_NAME="${ENV_NAME}"
+          fi
+          az group delete --subscription $AZURE_SUBSCRIPTION_ID --name $AZURE_RESOURCE_GROUP_NAME --yes

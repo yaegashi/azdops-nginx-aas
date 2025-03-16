@@ -9,6 +9,7 @@ DNS_ZONE_RESOURCE_GROUP_NAME: rg-dns
 DNS_ZONE_NAME: example.com
 DNS_RECORD_NAME: nginxsite
 DNS_WILDCARD: false
+DNS_CERTIFICATE_EXISTS: false
 LEGO_EMAIL: foo@example.com
 LEGO_SERVER: https://acme-staging-v02.api.letsencrypt.org/directory
 MS_TENANT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

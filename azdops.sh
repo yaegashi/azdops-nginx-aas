@@ -46,9 +46,8 @@ cmd_auth_config() {
 }
 
 cmd_auth_az() {
-	BRANCH=$(git rev-parse --abbrev-ref HEAD)
-	AZD_INPUTS_FILE=".github/azdops/${BRANCH}/inputs.yml"
-	AZD_REMOTE_FILE=".github/azdops/${BRANCH}/remote.yml"
+	AZD_INPUTS_FILE=".github/azdops/inputs.yml"
+	AZD_REMOTE_FILE=".github/azdops/remote.yml"
 	eval $(npx -y js-yaml "$AZD_INPUTS_FILE" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
 	eval $(npx -y js-yaml "$AZD_REMOTE_FILE" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
 
@@ -63,16 +62,14 @@ cmd_auth_az() {
 	run az keyvault set-policy -n $AZD_REMOTE_ENV_KEY_VAULT_NAME --secret-permissions all purge --certificate-permissions all purge --upn $UPN -o none
 
 	PASSWORD=$(run az keyvault secret show --vault-name $AZD_REMOTE_ENV_KEY_VAULT_NAME --name AZURE-CLIENT-SECRET --query value -o tsv || true)
-	if test -z "$PASSWORD"; then
-		msg "Creating new credentials for the app $AZURE_CLIENT_ID"
-		DISPLAY_NAME="$AZD_REMOTE_ENV_NAME $AZD_REMOTE_ENV_KEY_VAULT_NAME $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-		PASSWORD=$(run az ad app credential reset --only-show-errors --id $AZURE_CLIENT_ID --append --display-name "$DISPLAY_NAME" --end-date 2299-12-31 --query password --output tsv)
-		echo -n "$PASSWORD" | run az keyvault secret set --vault-name $AZD_REMOTE_ENV_KEY_VAULT_NAME --name AZURE-CLIENT-SECRET --file /dev/stdin -o none
-		run sleep 10
-	fi
 
 	msg "Deleting the temporary directory"
 	run rm -rf $AZURE_TEMP_DIR
+
+	if test -z "$PASSWORD"; then
+		msg "E: Failed to get the password from the key vault: run ./azdops.sh auth-az-secret"
+		exit 1
+	fi
 
 	msg "Logging in with Azure CLI as service principal"
 	unset AZURE_CONFIG_DIR
@@ -81,14 +78,30 @@ cmd_auth_az() {
 	run az account show
 }
 
+cmd_auth_az_secret() {
+	AZD_INPUTS_FILE=".github/azdops/inputs.yml"
+	AZD_REMOTE_FILE=".github/azdops/remote.yml"
+	eval $(npx -y js-yaml "$AZD_INPUTS_FILE" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
+	eval $(npx -y js-yaml "$AZD_REMOTE_FILE" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
+
+	if test -n "$AZURE_CLIENT_SECRET"; then
+		msg "Using the provided secret in AZURE_CLIENT_SECRET"
+		PASSWORD=$AZURE_CLIENT_SECRET
+	else
+		msg "Creating new secret for the app $AZURE_CLIENT_ID"
+		DISPLAY_NAME="$AZD_REMOTE_ENV_NAME $AZD_REMOTE_ENV_KEY_VAULT_NAME $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		PASSWORD=$(run az ad app credential reset --only-show-errors --id $AZURE_CLIENT_ID --append --display-name "$DISPLAY_NAME" --end-date 2299-12-31 --query password --output tsv)
+	fi
+	echo -n "$PASSWORD" | run az keyvault secret set --vault-name $AZD_REMOTE_ENV_KEY_VAULT_NAME --name AZURE-CLIENT-SECRET --file /dev/stdin -o none
+}
+
 cmd_auth_gh() {
 	run gh auth login "$@"
 }
 
 cmd_load() {
 	if test -z "$AZD_REMOTE_ENV_STORAGE_ACCOUNT_NAME" -o -z "$AZD_REMOTE_ENV_NAME"; then
-		BRANCH=$(git rev-parse --abbrev-ref HEAD)
-		AZD_REMOTE_FILE=".github/azdops/${BRANCH}/remote.yml"
+		AZD_REMOTE_FILE=".github/azdops/remote.yml"
 		if test -r "$AZD_REMOTE_FILE"; then
 			eval $(npx -y js-yaml "$AZD_REMOTE_FILE" | jq -r 'to_entries|map("\(.key)=\(.value)")|.[]')
 		fi
@@ -141,16 +154,17 @@ cmd_clear() {
 cmd_help() {
 	msg "Usage: $0 <command> [options...] [args...]"
 	msg "Options:"
-	msg "  --help,-h     - Show this help"
-	msg "  --no-prompt   - Do not ask for confirmation"
+	msg "  --help,-h      - Show this help"
+	msg "  --no-prompt    - Do not ask for confirmation"
 	msg "Commands:"
-	msg "  auth-config   - Run \"azd config set auth.useAzCliAuth true\""
-	msg "  auth-az       - Run \"az login\""
-	msg "  auth-gh       - Run \"gh auth login\""
-	msg "  load          - Load the azd remote env"
-	msg "  save          - Save the azd remote env"
-	msg "  set           - Set GitHub secrets for the azd remote env"
-	msg "  clear         - Clear the azd remote env"
+	msg "  auth-config    - Run \"azd config set auth.useAzCliAuth true\""
+	msg "  auth-az        - Run \"az login\""
+	msg "  auth-az-secret - Reset Azure client secret and save it in key vault"
+	msg "  auth-gh        - Run \"gh auth login\""
+	msg "  load           - Load the azd remote env"
+	msg "  save           - Save the azd remote env"
+	msg "  set            - Set GitHub secrets for the azd remote env"
+	msg "  clear          - Clear the azd remote env"
 	exit $1
 }
 
@@ -194,6 +208,10 @@ case "$1" in
 	auth-az)
 		shift
 		cmd_auth_az "$@"
+		;;
+	auth-az-secret)
+		shift
+		cmd_auth_az_secret "$@"
 		;;
 	auth-gh)
 		shift

@@ -9,8 +9,8 @@ permissions:
 
 env:
   AZDOPS_TEMPLATE: azdops-nginx-aas
-  AZD_INPUTS_FILE: .github/azdops/${{ github.ref_name }}/inputs.yml
-  AZD_REMOTE_FILE: .github/azdops/${{ github.ref_name }}/remote.yml
+  AZD_INPUTS_FILE: .github/azdops/inputs.yml
+  AZD_REMOTE_FILE: .github/azdops/remote.yml
 
 jobs:
   azdops-provision:
@@ -30,12 +30,10 @@ jobs:
         with:
           file-path: ${{ env.AZD_REMOTE_FILE }}
       - name: Azure CLI
-        uses: azure/login@v2
-        with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: true
+        id: azure-cli
+        uses: ./.github/actions/azure-cli
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       - name: Azure Developer CLI
         uses: Azure/setup-azd@v2.0.0
       - name: AZD Provision
@@ -43,8 +41,8 @@ jobs:
         run: |
           set -x
           REPO_NAME="${GITHUB_REPOSITORY##*/}"
-          BRANCH_NAME="${GITHUB_REF_NAME}"
-          ENV_NAME="${REPO_NAME}-${BRANCH_NAME}"
+          BRANCH_NAME=$(echo "${GITHUB_REF_NAME}" | tr / -)
+          ENV_NAME="${REPO_NAME}_${BRANCH_NAME}"
           ./azdops.sh auth-config
           if test -n "$AZD_REMOTE_ENV_STORAGE_ACCOUNT_NAME" -a "$AZD_REMOTE_ENV_NAME" = "$ENV_NAME"; then
             ./azdops.sh load --no-prompt
@@ -56,9 +54,10 @@ jobs:
           if test -n "$AZURE_PRINCIPAL_ID"; then
             azd env set AZURE_PRINCIPAL_ID $AZURE_PRINCIPAL_ID
           fi
-          if test -n "$AZURE_RESOURCE_GROUP_NAME"; then
-            azd env set AZURE_RESOURCE_GROUP_NAME $AZURE_RESOURCE_GROUP_NAME
+          if test -z "$AZURE_RESOURCE_GROUP_NAME"; then
+            AZURE_RESOURCE_GROUP_NAME="${ENV_NAME}"
           fi
+          azd env set AZURE_RESOURCE_GROUP_NAME $AZURE_RESOURCE_GROUP_NAME
           azd env set DNS_ZONE_RESOURCE_GROUP_NAME $DNS_ZONE_RESOURCE_GROUP_NAME
           azd env set DNS_ZONE_NAME $DNS_ZONE_NAME
           azd env set DNS_RECORD_NAME $DNS_RECORD_NAME
@@ -70,16 +69,12 @@ jobs:
           azd env set MS_ALLOWED_GROUP_ID $MS_ALLOWED_GROUP_ID
           azd env set APP_CERTIFICATE_EXISTS false
           azd provision --no-prompt
-          ./nginxacaops.sh meid-redirect --no-prompt
-          ./nginxacaops.sh meid-secret --no-prompt
+          ./nginxaasops.sh meid-redirect --no-prompt
+          ./nginxaasops.sh meid-secret --no-prompt
       - name: AZD Remote Environment
         shell: bash
         run: |
           set -x
-          GITHUB_README_FILE=.github/README.md
-          REPO_NAME="${GITHUB_REPOSITORY##*/}"
-          BRANCH_NAME="${GITHUB_REF_NAME}"
-          ENV_NAME="${REPO_NAME}-${BRANCH_NAME}"
           ./azdops.sh save --no-prompt
           mkdir -p "${AZD_REMOTE_FILE%/*}"
           cat <<EOF >$AZD_REMOTE_FILE
@@ -87,13 +82,14 @@ jobs:
           AZD_REMOTE_ENV_STORAGE_ACCOUNT_NAME: $(azd env get-value AZURE_STORAGE_ACCOUNT_NAME)
           AZD_REMOTE_ENV_KEY_VAULT_NAME: $(azd env get-value AZURE_KEY_VAULT_NAME)
           EOF
+          GITHUB_README_FILE=.github/README.md
           if ! test -r $GITHUB_README_FILE; then
           cat <<EOF >$GITHUB_README_FILE
-          # ${ENV_NAME} (${AZDOPS_TEMPLATE} instance)
+          # ${GITHUB_REPOSITORY##*/} (${AZDOPS_TEMPLATE} instance)
 
-          - AZD Ops README: [../README.md](../README.md)
-          - AZD Inputs File: [${AZD_INPUTS_FILE}](${AZD_INPUTS_FILE})
-          - AZD Remote File: [${AZD_REMOTE_FILE}](${AZD_REMOTE_FILE})
+          - AZD Ops README: [README.md](../README.md)
+          - AZD Inputs File: [${AZD_INPUTS_FILE}](../${AZD_INPUTS_FILE})
+          - AZD Remote File: [${AZD_REMOTE_FILE}](../${AZD_REMOTE_FILE})
           EOF
           fi
           echo "I: Updating $GITHUB_README_FILE and $AZD_REMOTE_FILE"
@@ -106,3 +102,12 @@ jobs:
             git commit -m "Update $AZD_REMOTE_FILE"
             git push
           fi
+      - name: AZD Azure Client Secret
+        shell: bash
+        run: |
+          set -x
+          if test -n "$AZURE_CLIENT_SECRET"; then
+            ./azdops.sh auth-az-secret
+          fi
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}

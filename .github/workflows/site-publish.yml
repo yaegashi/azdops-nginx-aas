@@ -8,8 +8,8 @@ permissions:
   id-token: write
 
 env:
-  AZD_INPUTS_FILE: .github/azdops/${{ github.ref_name }}/inputs.yml
-  AZD_REMOTE_FILE: .github/azdops/${{ github.ref_name }}/remote.yml
+  AZD_INPUTS_FILE: .github/azdops/inputs.yml
+  AZD_REMOTE_FILE: .github/azdops/remote.yml
 
 jobs:
   site-publish:
