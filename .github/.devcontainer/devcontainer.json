@@ -37,6 +37,9 @@
 			"packages": [
 				"python3-venv"
 			]
+		},
+		"./features/lego": {
+			"version": "v4.22.2"
 		}
 	}
 }

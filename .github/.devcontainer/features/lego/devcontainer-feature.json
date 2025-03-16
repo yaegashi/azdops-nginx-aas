@@ -1,0 +1,16 @@
+{
+    "id": "lego",
+    "version": "1.0.0",
+    "name": "lego feature",
+    "description": "Install lego from GitHub Release",
+    "options": {
+        "version": {
+            "type": "string",
+            "description": "Specify the lego version (like v4.22.2 or latest).",
+            "default": "latest"
+        }
+    },
+    "installsAfter": [
+        "ghcr.io/devcontainers/features/common-utils"
+    ]
+}
