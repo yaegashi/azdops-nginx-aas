@@ -1,0 +1,49 @@
+name: AZD Ops LEGO
+
+on:
+  workflow_dispatch:
+  # schedule: [{cron: '0 0 * * 0'}]
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  AZDOPS_TEMPLATE: azdops-nginx-aas
+  AZD_INPUTS_FILE: .github/azdops/inputs.yml
+  AZD_REMOTE_FILE: .github/azdops/remote.yml
+
+jobs:
+  azdops-lego:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Load AZD Ops inputs.yml
+        uses: actions-tools/yaml-outputs@v2
+        id: inputs
+        with:
+          file-path: ${{ env.AZD_INPUTS_FILE }}
+      - name: Load AZD Ops remote.yml
+        uses: actions-tools/yaml-outputs@v2
+        id: remote
+        with:
+          file-path: ${{ env.AZD_REMOTE_FILE }}
+      - name: Azure CLI
+        id: azure-cli
+        uses: ./.github/actions/azure-cli
+        env:
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      - name: Azure Developer CLI
+        uses: Azure/setup-azd@v2.0.0
+      - name: LEGO install
+        shell: bash
+        run: |
+          curl -sL https://github.com/go-acme/lego/releases/download/v4.22.2/lego_v4.22.2_linux_amd64.tar.gz | tar -C /usr/local/bin -xzf - lego
+      - name: LEGO update certificate
+        shell: bash
+        run: |
+          set -x
+          ./azdops.sh auth-config
+          ./azdops.sh load --no-prompt
+          ./nginxaasops.sh aas-lego

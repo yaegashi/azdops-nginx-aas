@@ -90,6 +90,13 @@ cmd_aas_hostnames() {
 	run az webapp show $ARGS --query hostNames -o tsv
 }
 
+cmd_aas_restart() {
+	ARGS="$AZ_ARGS"
+	msg "Restarting app..."
+	confirm
+	run az webapp restart $ARGS
+}
+
 cmd_aas_logs() {
 	ARGS="$AZ_ARGS"
 	run az webapp log tail $ARGS
@@ -100,11 +107,34 @@ cmd_aas_console() {
 	run az webapp ssh $ARGS
 }
 
-cmd_aas_restart() {
-	ARGS="$AZ_ARGS"
-	msg "Restarting app..."
-	confirm
-	run az webapp restart $ARGS
+cmd_aas_lego() {
+	export AZURE_AUTH_METHOD=cli
+	export LEGO_DISABLE_CNAME_SUPPORT=true
+	export LEGO_PATH=$(mktemp -d)
+	if test "$DNS_RECORD_NAME" = '@'; then
+		DNS_DOMAIN_NAME="${DNS_ZONE_NAME}"
+	else
+		DNS_DOMAIN_NAME="${DNS_RECORD_NAME}.${DNS_ZONE_NAME}"
+	fi
+    LEGO_CERT_PATH="${LEGO_PATH}/certificates/${DNS_DOMAIN_NAME}.crt"
+	run az storage directory create --only-show-errors --account-name $AZURE_STORAGE_ACCOUNT_NAME --share lego --name data >/dev/null
+	run az storage file download-batch --only-show-errors --account-name $AZURE_STORAGE_ACCOUNT_NAME --source lego/data --destination $LEGO_PATH
+    if test -f "$LEGO_CERT_PATH"; then
+        CMD="renew --renew-hook 'bash $0 aas-lego-hook'"
+    else
+        CMD="run --run-hook 'bash $0 aas-lego-hook'"
+    fi
+    eval run lego -a --server $LEGO_SERVER --email $LEGO_EMAIL --dns azuredns --dns.propagation-disable-ans -d "'$DNS_DOMAIN_NAME'" -d "'*.$DNS_DOMAIN_NAME'" --pfx "$CMD"
+	rm -rf "$LEGO_PATH"
+}
+
+cmd_aas_lego_hook() {
+	if test -z "$LEGO_CERT_PFX_PATH" -o -z "$LEGO_PATH"; then
+		msg 'Missing LEGO_CERT_PFX_PATH or LEGO_PATH settings'
+		exit 1
+	fi
+	run az keyvault certificate import --vault-name $AZURE_KEY_VAULT_NAME --name DNS-CERTIFICATE --file $LEGO_CERT_PFX_PATH --password changeit
+	run az storage file upload-batch --only-show-errors --account-name $AZURE_STORAGE_ACCOUNT_NAME --source $LEGO_PATH --destination lego/data
 }
 
 cmd_portal_aas() {
@@ -145,6 +175,8 @@ cmd_help() {
 	msg "  aas-restart                - AAS: restart revision"
 	msg "  aas-logs                   - AAS: show container logs"
 	msg "  aas-console                - AAS: connect to container"
+	msg "  aas-lego                   - AAS: LEGO certificate update"
+	msg "  aas-lego-hook              - AAS: LEGO certificate update hook"
 	msg "  portal-aas                 - Portal: open AAS resource group in browser"
 	msg "  portal-meid                - Portal: open ME-ID app registration in browser"
 	msg "  open                       - open app in browser"
@@ -224,6 +256,10 @@ case "$1" in
 		shift
 		cmd_aas_hostnames "$@"
 		;;
+	aas-restart)
+		shift
+		cmd_aas_restart "$@"
+		;;
 	aas-logs)
 		shift
 		cmd_aas_logs "$@"
@@ -232,9 +268,13 @@ case "$1" in
 		shift
 		cmd_aas_console "$@"
 		;;
-	aas-restart)
+	aas-lego)
 		shift
-		cmd_aas_restart "$@"
+		cmd_aas_lego "$@"
+		;;
+	aas-lego-hook)
+		shift
+		cmd_aas_lego_hook "$@"
 		;;
 	portal-aas)
 		shift
