@@ -62,6 +62,7 @@ jobs:
           azd env set DNS_ZONE_NAME $DNS_ZONE_NAME
           azd env set DNS_RECORD_NAME $DNS_RECORD_NAME
           azd env set DNS_WILDCARD $DNS_WILDCARD
+          azd env set DNS_CERTIFICATE_EXISTS $DNS_CERTIFICATE_EXISTS
           azd env set LEGO_EMAIL $LEGO_EMAIL
           azd env set LEGO_SERVER $LEGO_SERVER
           azd env set MS_TENANT_ID $MS_TENANT_ID

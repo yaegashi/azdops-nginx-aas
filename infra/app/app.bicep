@@ -17,6 +17,8 @@ param msAllowedGroupId string = ''
 param storageAccountName string
 param userAssignedIdentityName string
 
+var dnsCertificateExists = !empty(dnsCertificateKeyVaultId) && !empty(dnsCertificateKeyVaultSecretName)
+
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: userAssignedIdentityName
 }
@@ -48,7 +50,7 @@ resource appCertificate 'Microsoft.Web/certificates@2024-04-01' = if (!empty(dns
   }
 }
 
-resource dnsCertificate 'Microsoft.Web/certificates@2024-04-01' = if (!empty(dnsCertificateKeyVaultId)) {
+resource dnsCertificate 'Microsoft.Web/certificates@2024-04-01' = if (dnsCertificateExists) {
   name: 'dns-cert-${dnsDomainName}'
   location: location
   tags: tags
@@ -102,6 +104,9 @@ resource appHostNameBindingWildcard 'Microsoft.Web/sites/hostNameBindings@2024-0
     azureResourceName: app.name
     azureResourceType: 'Website'
     siteName: app.name
+    sslState: dnsCertificateExists ? 'SniEnabled' : 'Disabled'
+    thumbprint: dnsCertificateExists ? dnsCertificate.properties.thumbprint : null
+    customHostNameDnsRecordType: dnsCertificateExists ? dnsRecordType : null
   }
 }
 

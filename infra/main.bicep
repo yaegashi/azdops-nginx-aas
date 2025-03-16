@@ -37,10 +37,6 @@ param dnsWildcard bool = false
 
 param dnsCertificateExists bool = false
 
-param legoEmail string = ''
-
-param legoServer string = 'https://acme-staging-v02.api.letsencrypt.org/directory'
-
 param msTenantId string
 param msClientId string
 @secure()
@@ -58,8 +54,6 @@ var resourceToken = toLower(uniqueString(subscription().id, environmentName, loc
 
 var dnsEnable = !empty(dnsZoneResourceGroupName) && !empty(dnsZoneName) && !empty(dnsRecordName)
 var dnsDomainName = !dnsEnable ? '' : dnsRecordName == '@' ? dnsZoneName : '${dnsRecordName}.${dnsZoneName}'
-
-var legoEnable = dnsWildcard && !empty(legoEmail) && !empty(legoServer)
 
 resource dnsZoneRG 'Microsoft.Resources/resourceGroups@2021-04-01' existing = if (dnsEnable && !appCertificateExists) {
   scope: subscription(dnsZoneSubscriptionId)
@@ -117,7 +111,7 @@ module dnsAWildcard './app/dns-a.bicep' = if (dnsEnable && !appCertificateExists
 }
 
 module dnsAccess './app/dns-access.bicep' = if (dnsEnable) {
-  dependsOn: [KeyVaultAccessUserAssignedIdentity] // Insert delay
+  dependsOn: [keyVaultAccessUserAssignedIdentity] // Insert delay
   name: 'dnsAccess'
   scope: dnsZoneRG
   params: {
@@ -154,8 +148,8 @@ module keyVault './core/security/keyvault.bicep' = {
   }
 }
 
-module KeyVaultAccessUserAssignedIdentity './core/security/keyvault-access.bicep' = {
-  name: 'KeyVaultAccessUserAssignedIdentity'
+module keyVaultAccessUserAssignedIdentity './core/security/keyvault-access.bicep' = {
+  name: 'keyVaultAccessUserAssignedIdentity'
   scope: rg
   params: {
     keyVaultName: keyVault.outputs.name
@@ -163,6 +157,49 @@ module KeyVaultAccessUserAssignedIdentity './core/security/keyvault-access.bicep
     permissions: {
       secrets: ['list', 'get']
       certificates: ['list', 'get', 'import']
+    }
+  }
+}
+
+// https://learn.microsoft.com/en-us/azure/app-service/configure-ssl-certificate#import-a-certificate-from-key-vault
+module msGraphPrincipal1 './app/msgraph-principal.bicep' = {
+  name: 'msGraphPrincipal1'
+  scope: rg
+  params: {
+    appId: 'abfa0a7c-a6b6-4736-8310-5855508787cd' // "Microsoft App Service"
+  }
+}
+
+module msGraphPrincipal2 './app/msgraph-principal.bicep' = {
+  name: 'msGraphPrincipal2'
+  scope: rg
+  params: {
+    appId: 'f3c21649-0979-4721-ac85-b0216b2cf413' // "Microsoft.Azure.CertificateRegistration"
+  }
+}
+
+module keyVaultAccessAppService1 './core/security/keyvault-access.bicep' = {
+  name: 'keyVaultAccessAppService1'
+  scope: rg
+  params: {
+    keyVaultName: keyVault.outputs.name
+    principalId: msGraphPrincipal1.outputs.principalId
+    permissions: {
+      secrets: ['get']
+      certificates: ['get']
+    }
+  }
+}
+
+module keyVaultAccessAppService2 './core/security/keyvault-access.bicep' = {
+  name: 'keyVaultAccessAppService2'
+  scope: rg
+  params: {
+    keyVaultName: keyVault.outputs.name
+    principalId: msGraphPrincipal2.outputs.principalId
+    permissions: {
+      secrets: ['get']
+      certificates: ['get']
     }
   }
 }
