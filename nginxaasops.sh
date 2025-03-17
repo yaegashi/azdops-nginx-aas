@@ -124,7 +124,7 @@ cmd_aas_lego() {
     else
         CMD="run --run-hook 'bash $0 aas-lego-hook'"
     fi
-    eval run lego -a --server $LEGO_SERVER --email $LEGO_EMAIL --dns azuredns --dns.propagation-disable-ans -d "'$DNS_DOMAIN_NAME'" -d "'*.$DNS_DOMAIN_NAME'" --pfx "$CMD"
+    eval run lego -a --server $LEGO_SERVER --email $LEGO_EMAIL --dns azuredns --dns.propagation-disable-ans  -d "'$DNS_DOMAIN_NAME'" -d "'*.$DNS_DOMAIN_NAME'" -k rsa4096 --pfx "$CMD"
 	rm -rf "$LEGO_PATH"
 }
 
