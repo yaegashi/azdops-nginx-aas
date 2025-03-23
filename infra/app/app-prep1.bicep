@@ -20,5 +20,5 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
 
 output appId string = app.id
 output fqdn string = app.properties.defaultHostName
-output staticIp string = app.properties.outboundIpAddresses
+output staticIp string = app.properties.inboundIpAddress
 output customDomainVerificationId string = app.properties.customDomainVerificationId

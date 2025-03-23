@@ -47,6 +47,7 @@ resource appCertificate 'Microsoft.Web/certificates@2024-04-01' = if (!empty(dns
   tags: tags
   properties: {
     canonicalName: dnsDomainName
+    domainValidationMethod: dnsRecordType == 'A' ? 'http-token' : null
     serverFarmId: appServicePlanId
   }
 }
