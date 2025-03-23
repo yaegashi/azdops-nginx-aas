@@ -2,6 +2,7 @@ param name string
 param location string = resourceGroup().location
 param tags object = {}
 param appServicePlanId string
+param appImage string
 
 resource app 'Microsoft.Web/sites@2024-04-01' = {
   name: name
@@ -9,7 +10,7 @@ resource app 'Microsoft.Web/sites@2024-04-01' = {
   tags: tags
   properties: {
     siteConfig: {
-      linuxFxVersion: 'DOCKER|ghcr.io/yaegashi/azdops-nginx-aas/nginx:latest'
+      linuxFxVersion: 'DOCKER|${appImage}'
       alwaysOn: true
       azureStorageAccounts: {}
     }

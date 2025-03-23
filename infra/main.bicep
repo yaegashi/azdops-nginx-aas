@@ -13,6 +13,10 @@ param userAssignedIdentityName string = ''
 
 param resourceGroupName string = ''
 
+param appServicePlanId string = ''
+
+param appImage string = ''
+
 param keyVaultName string = ''
 
 param storageAccountName string = ''
@@ -264,7 +268,7 @@ module monitoring './core/monitor/monitoring.bicep' = {
       : '${abbrs.portalDashboards}${resourceToken}'
   }
 }
-module asp './core/host/appserviceplan.bicep' = {
+module asp './core/host/appserviceplan.bicep' = if (appServicePlanId == '') {
   name: 'asp'
   scope: rg
   params: {
@@ -276,6 +280,9 @@ module asp './core/host/appserviceplan.bicep' = {
   }
 }
 
+var xAppServicePlanId = appServicePlanId == '' ? asp.outputs.id : appServicePlanId
+var xAppImage = appImage == '' ? 'ghcr.io/yaegashi/azure-easy-auth-njs/nginx:latest' : appImage
+
 module appPrep1 './app/app-prep1.bicep' = if (dnsEnable && !appCertificateExists) {
   name: 'appPrep1'
   scope: rg
@@ -283,7 +290,8 @@ module appPrep1 './app/app-prep1.bicep' = if (dnsEnable && !appCertificateExists
     location: location
     tags: tags
     name: '${abbrs.webSitesAppService}${resourceToken}'
-    appServicePlanId: asp.outputs.id
+    appServicePlanId: xAppServicePlanId
+    appImage: xAppImage
   }
 }
 
@@ -306,7 +314,8 @@ module app './app/app.bicep' = {
     location: location
     tags: tags
     name: '${abbrs.webSitesAppService}${resourceToken}'
-    appServicePlanId: asp.outputs.id
+    appServicePlanId: xAppServicePlanId
+    appImage: xAppImage
     applicationInsightsName: monitoring.outputs.applicationInsightsName
     logAnalyticsWorkspaceName: monitoring.outputs.logAnalyticsWorkspaceName
     storageAccountName: storageAccount.outputs.name
