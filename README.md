@@ -2,24 +2,21 @@
 
 ## Introduction
 
-A cloud-native DevOps solution for [NGINX] with Azure Container Apps.
+A cloud-native DevOps solution for [NGINX](https://nginx.org) with Azure App Service.
 
-This repository provides AZD Ops for the following Azure resources.
+This repository provides AZD Ops for the following Azure resources:
 
-- Azure Container App that runs the [NGINX container].
-- Azure Storage Account that holds web site contents and NGINX configuration.
+- Azure App Service running a [customized NGINX container](https://github.com/yaegashi/azure-easy-auth-njs).
+- Azure Storage Account that stores website contents and NGINX configuration.
 
-[NGINX]: https://nginx.org/en/
-[NGINX container]: https://hub.docker.com/_/nginx
+## AZD Ops Instructions
 
-## AZD Ops Instruction
-
-This repository utilizes GitHub Actions and Azure Developer CLI (AZD) for the GitOps tooling (AZD Ops).
-You can bootstrap an AZD Ops repository by following these steps:
+This repository leverages GitHub Actions and Azure Developer CLI (AZD) for GitOps tooling (AZD Ops).
+Follow these steps to set up your own AZD Ops repository:
 
 1. Create a new **private** GitHub repository by importing from this repository. Forking is not recommended.
-2. Copy the AZD Ops settings from `.github/azdops/main/inputs.example.yml` to `.github/azdops/main/inputs.yml` and edit it. You can do this using the GitHub Web UI.
-3. Manually run the "AZD Ops Provision" workflow in the GitHub Actions Web UI. It will perform the following tasks:
-    - Provision Azure resources using AZD with the `inputs.yml` settings. By default, a resource group named `{repo_name}-{branch_name}` will be created.
-    - Make an AZD remote environment in the Azure Storage Account and save the AZD env variables in it.
-    - Update `.github/README.md` and `.github/azdops/main/remote.yml`, then commit and push the changes to the repository.
+2. Copy the AZD Ops settings from `.github/azdops/inputs.example.yml` to `.github/azdops/inputs.yml` and customize as needed. You can do this using the GitHub Web UI.
+3. Manually trigger the "AZD Ops Provision" workflow in the GitHub Actions Web UI. This workflow will:
+    - Provision Azure resources using AZD with your `inputs.yml` settings. By default, it creates a resource group named `{repo_name}_{branch_name}`.
+    - Create an AZD remote environment in the Azure Storage Account and store the AZD environment variables.
+    - Update `.github/README.md` and `.github/azdops/remote.yml`, then commit and push the changes to your repository.
