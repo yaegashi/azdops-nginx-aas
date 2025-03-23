@@ -49,25 +49,25 @@ jobs:
           else
             azd env new $ENV_NAME
           fi
-          azd env set AZURE_SUBSCRIPTION_ID $AZURE_SUBSCRIPTION_ID
-          azd env set AZURE_LOCATION $AZURE_LOCATION
-          if test -n "$AZURE_PRINCIPAL_ID"; then
-            azd env set AZURE_PRINCIPAL_ID $AZURE_PRINCIPAL_ID
-          fi
+          azd env set AZURE_SUBSCRIPTION_ID "$AZURE_SUBSCRIPTION_ID"
+          azd env set AZURE_LOCATION "$AZURE_LOCATION"
+          azd env set AZURE_PRINCIPAL_ID "$AZURE_PRINCIPAL_ID"
           if test -z "$AZURE_RESOURCE_GROUP_NAME"; then
             AZURE_RESOURCE_GROUP_NAME="${ENV_NAME}"
           fi
-          azd env set AZURE_RESOURCE_GROUP_NAME $AZURE_RESOURCE_GROUP_NAME
-          azd env set DNS_ZONE_RESOURCE_GROUP_NAME $DNS_ZONE_RESOURCE_GROUP_NAME
-          azd env set DNS_ZONE_NAME $DNS_ZONE_NAME
-          azd env set DNS_RECORD_NAME $DNS_RECORD_NAME
-          azd env set DNS_WILDCARD $DNS_WILDCARD
-          azd env set DNS_CERTIFICATE_EXISTS $DNS_CERTIFICATE_EXISTS
-          azd env set LEGO_EMAIL $LEGO_EMAIL
-          azd env set LEGO_SERVER $LEGO_SERVER
-          azd env set MS_TENANT_ID $MS_TENANT_ID
-          azd env set MS_CLIENT_ID $MS_CLIENT_ID
-          azd env set MS_ALLOWED_GROUP_ID $MS_ALLOWED_GROUP_ID
+          azd env set AZURE_RESOURCE_GROUP_NAME "$AZURE_RESOURCE_GROUP_NAME"
+          azd env set APP_SERVICE_PLAN_ID "$APP_SERVICE_PLAN_ID"
+          azd env set APP_IMAGE "$APP_IMAGE"
+          azd env set DNS_ZONE_RESOURCE_GROUP_NAME "$DNS_ZONE_RESOURCE_GROUP_NAME"
+          azd env set DNS_ZONE_NAME "$DNS_ZONE_NAME"
+          azd env set DNS_RECORD_NAME "$DNS_RECORD_NAME"
+          azd env set DNS_WILDCARD "$DNS_WILDCARD"
+          azd env set DNS_CERTIFICATE_EXISTS "$DNS_CERTIFICATE_EXISTS"
+          azd env set LEGO_EMAIL "$LEGO_EMAIL"
+          azd env set LEGO_SERVER "$LEGO_SERVER"
+          azd env set MS_TENANT_ID "$MS_TENANT_ID"
+          azd env set MS_CLIENT_ID "$MS_CLIENT_ID"
+          azd env set MS_ALLOWED_GROUP_ID "$MS_ALLOWED_GROUP_ID"
           azd env set APP_CERTIFICATE_EXISTS false
           azd provision --no-prompt
           ./nginxaasops.sh meid-redirect --no-prompt
