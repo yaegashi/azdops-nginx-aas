@@ -4,6 +4,8 @@ AZURE_SUBSCRIPTION_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 AZURE_LOCATION: japaneast
 AZURE_PRINCIPAL_ID: ''
 AZURE_RESOURCE_GROUP_NAME: ''
+APP_SERVICE_PLAN_ID: ''
+APP_IMAGE: ''
 DNS_ZONE_SUBSCRIPTION_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 DNS_ZONE_RESOURCE_GROUP_NAME: rg-dns
 DNS_ZONE_NAME: example.com
