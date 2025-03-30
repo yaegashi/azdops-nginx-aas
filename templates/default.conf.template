@@ -1,13 +1,16 @@
 map $host $site_name {
-    ~^${NGINX_HOST}$ main;
-    ~^(.+)\.${NGINX_HOST}$ $1;
+    default default;
+    ~*^(.+)\.${NGINX_HOST}$ $1;
 }
 
 server {
     listen ${NGINX_PORT};
     server_name .${NGINX_HOST};
-    location / {
-        root /data/sites/$site_name;
-        index index.html index.htm;
-    }
+    root /nginx/sites/$site_name;
+}
+
+server {
+    listen ${NGINX_PORT} default_server;
+    server_name _;
+    return 404 "Not Found";
 }
