@@ -62,7 +62,6 @@ jobs:
           azd env set DNS_ZONE_NAME "$DNS_ZONE_NAME"
           azd env set DNS_RECORD_NAME "$DNS_RECORD_NAME"
           azd env set DNS_WILDCARD "$DNS_WILDCARD"
-          azd env set DNS_CERTIFICATE_EXISTS "$DNS_CERTIFICATE_EXISTS"
           azd env set LEGO_EMAIL "$LEGO_EMAIL"
           azd env set LEGO_SERVER "$LEGO_SERVER"
           azd env set MS_TENANT_ID "$MS_TENANT_ID"
@@ -71,6 +70,12 @@ jobs:
           azd env set APP_CERTIFICATE_EXISTS false
           azd env set GITHUB_REPOSITORY_URL "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
           azd env set GITHUB_ACTIONS_RUN_URL "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # Check if DNS-CERTIFICATE exists in the key vault
+          AZURE_KEY_VAULT_NAME=$(azd env get-value AZURE_KEY_VAULT_NAME)
+          if test -n "$AZURE_KEY_VAULT_NAME"; then
+            az keyvault certificate show --vault-name "$AZURE_KEY_VAULT_NAME" --name DNS-CERTIFICATE > /dev/null 2>&1 && A=true || A=false
+            azd env set DNS_CERTIFICATE_EXISTS $A
+          fi
           azd provision --no-prompt
           ./nginxaasops.sh meid-redirect --no-prompt
           ./nginxaasops.sh meid-secret --no-prompt
