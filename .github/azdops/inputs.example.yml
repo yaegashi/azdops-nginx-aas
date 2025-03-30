@@ -1,19 +1,48 @@
+# Microsoft Entra ID Application Registration for Azure Resource Deployment
+# Required permissions for this application registration:
+# - Owner role on Azure subscriptions (AZURE_SUBSCRIPTION_ID and DNS_ZONE_SUBSCRIPTION_ID) to manage resources and role assignments
+# - Ownership of the application registration specified by MS_CLIENT_ID to manage secrets and redirect URIs
+# - Microsoft Graph API permission "Application.ReadWrite.OwnedBy" to modify application registration settings
+# Grant this repository's workflow access to this application registration using either of the following methods:
+# - Create a federated credential in the application registration
+# - Create a client secret in the application registration and set it in AZURE_CLIENT_SECRET of the repository secrets
 AZURE_TENANT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 AZURE_CLIENT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Target Azure Subscription and Region for Resource Deployment
 AZURE_SUBSCRIPTION_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 AZURE_LOCATION: japaneast
+
+# Optional: Leave empty to use the default
 AZURE_PRINCIPAL_ID: ''
+
+# Optional: Leave empty to use the default
 AZURE_RESOURCE_GROUP_NAME: ''
+
+# Optional: Leave empty to create a new App Service Plan
 APP_SERVICE_PLAN_ID: ''
+
+# Optional: Leave empty to use the default "ghcr.io/yaegashi/azure-easy-auth-njs/nginx:latest"
 APP_IMAGE: ''
+
+# DNS Zone Configuration for your container app's custom domain
 DNS_ZONE_SUBSCRIPTION_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 DNS_ZONE_RESOURCE_GROUP_NAME: rg-dns
 DNS_ZONE_NAME: example.com
 DNS_RECORD_NAME: nginxsite
+
+# Set to true to enable wildcard subdomain support (*.nginxsite.example.com)
 DNS_WILDCARD: false
-DNS_CERTIFICATE_EXISTS: false
+
+# LEGO/Let's Encrypt Configuration for SSL Certificate Generation
+# Note: For production, change the server URL from staging to production endpoint
 LEGO_EMAIL: foo@example.com
 LEGO_SERVER: https://acme-staging-v02.api.letsencrypt.org/directory
+
+# Microsoft Entra ID Configuration for Authentication
+# These settings configure Azure Easy Auth integration for your container app
 MS_TENANT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 MS_CLIENT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Optional: Object ID of the Microsoft Entra ID group to restrict access to the website
 MS_ALLOWED_GROUP_ID: ''
