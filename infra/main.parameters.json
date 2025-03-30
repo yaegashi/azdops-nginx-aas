@@ -41,12 +41,6 @@
     "dnsCertificateExists": {
       "value": "${DNS_CERTIFICATE_EXISTS=false}"
     },
-    "legoEmail": {
-      "value": "${LEGO_EMAIL}"
-    },
-    "legoServer": {
-      "value": "${LEGO_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory}"
-    },
     "msTenantId": {
       "value": "${MS_TENANT_ID}"
     },
