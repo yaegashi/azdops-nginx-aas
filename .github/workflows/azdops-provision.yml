@@ -84,13 +84,20 @@ jobs:
           AZD_REMOTE_ENV_KEY_VAULT_NAME: $(azd env get-value AZURE_KEY_VAULT_NAME)
           EOF
           GITHUB_README_FILE=.github/README.md
+          AZURE_TENANT_ID=$(azd env get-value AZURE_TENANT_ID)
+          AZURE_SUBSCRIPTION_ID=$(azd env get-value AZURE_SUBSCRIPTION_ID)
+          AZURE_RESOURCE_GROUP_NAME=$(azd env get-value AZURE_RESOURCE_GROUP_NAME)
+          AZURE_PORTAL_URL="https://portal.azure.com/#@${AZURE_TENANT_ID}/resource/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP_NAME}"
           if ! test -r $GITHUB_README_FILE; then
           cat <<EOF >$GITHUB_README_FILE
-          # ${GITHUB_REPOSITORY##*/} (${AZDOPS_TEMPLATE} instance)
+          # ${GITHUB_REPOSITORY##*/} (${AZDOPS_TEMPLATE})
 
-          - AZD Ops README: [README.md](../README.md)
-          - AZD Inputs File: [${AZD_INPUTS_FILE}](../${AZD_INPUTS_FILE})
-          - AZD Remote File: [${AZD_REMOTE_FILE}](../${AZD_REMOTE_FILE})
+          |Resource|Location|
+          |-|-|
+          |AZD README (this file)|[${GITHUB_README_FILE}](${GITHUB_README_FILE#.github/})|
+          |AZD Inputs File|[${AZD_INPUTS_FILE}](${AZD_INPUTS_FILE#.github/})|
+          |AZD Remote File|[${AZD_REMOTE_FILE}](${AZD_REMOTE_FILE#.github/})|
+          |Azure Resource Group|[${AZURE_RESOURCE_GROUP_NAME}](${AZURE_PORTAL_URL})|
           EOF
           fi
           echo "I: Updating $GITHUB_README_FILE and $AZD_REMOTE_FILE"
