@@ -69,6 +69,8 @@ jobs:
           azd env set MS_CLIENT_ID "$MS_CLIENT_ID"
           azd env set MS_ALLOWED_GROUP_ID "$MS_ALLOWED_GROUP_ID"
           azd env set APP_CERTIFICATE_EXISTS false
+          azd env set GITHUB_REPOSITORY_URL "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          azd env set GITHUB_ACTIONS_RUN_URL "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           azd provision --no-prompt
           ./nginxaasops.sh meid-redirect --no-prompt
           ./nginxaasops.sh meid-secret --no-prompt

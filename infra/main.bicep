@@ -1,10 +1,7 @@
 targetScope = 'subscription'
 
-@minLength(1)
-@maxLength(64)
 param environmentName string
 
-@minLength(1)
 param location string
 
 param principalId string
@@ -46,6 +43,9 @@ param msClientId string
 @secure()
 param msClientSecret string
 param msAllowedGroupId string = ''
+
+param githubRepositoryUrl string = ''
+param githubActionsRunUrl string = ''
 
 var abbrs = loadJsonContent('./abbreviations.json')
 
@@ -127,7 +127,11 @@ module dnsAccess './app/dns-access.bicep' = if (dnsEnable) {
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
   location: location
-  tags: tags
+  tags: union(
+    tags,
+    !empty(githubRepositoryUrl) ? { 'github-repository-url': githubRepositoryUrl } : {},
+    !empty(githubActionsRunUrl) ? { 'github-actions-run-url': githubActionsRunUrl } : {}
+  )
 }
 
 module userAssignedIdentity './app/identity.bicep' = {

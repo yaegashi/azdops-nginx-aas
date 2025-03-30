@@ -58,6 +58,12 @@
     },
     "msAllowedGroupId": {
       "value": "${MS_ALLOWED_GROUP_ID}"
+    },
+    "githubRepositoryUrl": {
+      "value": "${GITHUB_REPOSITORY_URL}"
+    },
+    "githubActionsRunUrl": {
+      "value": "${GITHUB_ACTIONS_RUN_URL}"
     }
   }
 }
