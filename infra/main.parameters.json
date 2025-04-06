@@ -53,6 +53,9 @@
     "msAllowedGroupId": {
       "value": "${MS_ALLOWED_GROUP_ID}"
     },
+    "nginxContributorPrincipalId": {
+      "value": "${NGINX_CONTRIBUTOR_PRINCIPAL_ID}"
+    },
     "githubRepositoryUrl": {
       "value": "${GITHUB_REPOSITORY_URL}"
     },

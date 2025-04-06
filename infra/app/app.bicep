@@ -5,6 +5,7 @@ param appServicePlanId string
 param appImage string
 param applicationInsightsName string = ''
 param logAnalyticsWorkspaceName string
+param storageAccountName string
 param dnsDomainName string = ''
 param dnsWildcard bool = false
 @allowed(['CName', 'A'])
@@ -15,7 +16,7 @@ param msClientId string
 param msTenantId string
 param msClientSecretKV string
 param msAllowedGroupId string = ''
-param storageAccountName string
+param nginxContributorPrincipalId string = ''
 param userAssignedIdentityName string
 
 var dnsCertificateExists = !empty(dnsCertificateKeyVaultId) && !empty(dnsCertificateKeyVaultSecretName)
@@ -38,6 +39,29 @@ resource storage 'Microsoft.Storage/storageAccounts@2022-05-01' existing = {
     resource lego 'shares' = {
       name: 'lego'
     }
+    // Resource ID "fileShares/nginx" is needed for the role assignment (nginxRole)
+    // https://github.com/Azure/bicep-types-az/issues/1532
+    #disable-next-line BCP081
+    resource nginxForRole 'fileShares' existing = {
+      name: 'nginx'
+    }
+  }
+}
+
+// Azure built-in role: Storage File Data Privileged Contributor
+var nginxRoleDefId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '69566ab7-960f-475b-8e7c-b3118f30c6bd'
+)
+
+// Grant file share acecss to NGINX content contributor
+resource nginxRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(nginxContributorPrincipalId)) {
+  dependsOn: [storage::fileService::nginx]
+  scope: storage::fileService::nginxForRole
+  name: guid(subscription().id, resourceGroup().id, nginxContributorPrincipalId, nginxRoleDefId)
+  properties: {
+    principalId: nginxContributorPrincipalId
+    roleDefinitionId: nginxRoleDefId
   }
 }
 

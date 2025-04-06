@@ -46,3 +46,6 @@ MS_CLIENT_ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # Optional: Object ID of the Microsoft Entra ID group to restrict access to the website
 MS_ALLOWED_GROUP_ID: ''
+
+# Optional: Object ID of the Microsoft Entra ID group to allow access to the nginx file share
+NGINX_CONTRIBUTOR_PRINCIPAL_ID: ''
